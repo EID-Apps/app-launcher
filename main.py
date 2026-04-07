@@ -40,8 +40,8 @@ APPS = [
     {
         "name": "Shop Drawing QA",
         "description": "Automated shop drawing review with AI-powered markup, spec compliance checks, and approval workflows.",
-        "url": "/shop-drawing-qa",
-        "status": "planned",
+        "url": "/shop-drawing-qa/",
+        "status": "live",
         "icon": "drafting",
     },
 ]
