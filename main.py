@@ -46,14 +46,26 @@ APPS = [
     },
 ]
 
-CLIENT_PORTALS = [
-    {
-        "name": "McCollum Residence",
-        "subtitle": "408 Cayuse Court",
-        "url": "/client/mccollum",
-        "categories": 7,
-    },
-]
+PORTALS_FILE = Path("/opt/eid-apps/client-portal/data/projects.json")
+
+
+def _load_portals() -> list[dict]:
+    """Load client portal cards from the shared projects.json."""
+    import json
+    try:
+        data = json.load(open(PORTALS_FILE))
+        portals = []
+        for slug, p in data.get("projects", {}).items():
+            portals.append({
+                "name": p.get("name", slug),
+                "subtitle": p.get("address", ""),
+                "url": f"/client/{slug}",
+                "categories": p.get("active_schedules", 0),
+            })
+        portals.sort(key=lambda x: x["name"])
+        return portals
+    except Exception:
+        return []
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -61,7 +73,7 @@ async def hub(request: Request):
     return templates.TemplateResponse("index.html", {
         "request": request,
         "apps": APPS,
-        "portals": CLIENT_PORTALS,
+        "portals": _load_portals(),
     })
 
 
