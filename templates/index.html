@@ -277,6 +277,8 @@
             <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3V3zm2 2v4h6V5H5zm8 0v4h6V5h-6zM5 11v4h6v-4H5zm8 0v4h6v-4h-6zM5 17v2h6v-2H5zm8 0v2h6v-2h-6z"/></svg>
           {% elif app.icon == 'drafting' %}
             <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 000-1.42l-2.34-2.34a1.003 1.003 0 00-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>
+          {% elif app.icon == 'swatch' %}
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M2 6l4.5-4.5a1 1 0 011.42 0l14.14 14.14a1 1 0 010 1.42L17.5 21.5a1 1 0 01-1.42 0L2 7.42A1 1 0 012 6zm1.71 1L14.38 17.67l2.83-2.83L6.54 4.17 3.71 7zm12.38 11.5l1.41-1.41-1.41-1.42-1.42 1.42 1.42 1.41zM5 20h14v2H5z"/></svg>
           {% endif %}
         </div>
         <div class="card-name">{{ app.name }}</div>
@@ -311,10 +313,47 @@
       </div>
     </div>
     {% endif %}
+
+    <div style="text-align:center; margin:2rem 0 1rem;">
+      <button id="refresh-btn" onclick="refreshAll()" style="
+        font-family:'DM Mono',monospace; font-size:0.75rem; letter-spacing:0.5px;
+        background:none; border:1px solid var(--border); border-radius:20px;
+        padding:0.5rem 1.25rem; color:var(--warm-gray); cursor:pointer;
+        transition: all 0.15s;
+      " onmouseover="this.style.borderColor='var(--olive)';this.style.color='var(--olive)'"
+         onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--warm-gray)'">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:4px;">
+          <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+        Refresh All Data
+      </button>
+      <div id="refresh-msg" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--warm-gray-light);margin-top:0.4rem;"></div>
+    </div>
   </main>
 
   <footer class="footer">
     EID App Platform &bull; Ellis Interior Design &bull; 2026
   </footer>
+
+  <script>
+  async function refreshAll() {
+    const btn = document.getElementById('refresh-btn');
+    const msg = document.getElementById('refresh-msg');
+    btn.disabled = true;
+    btn.textContent = 'Refreshing...';
+    msg.textContent = '';
+    try {
+      const resp = await fetch('/client/refresh-all', {method: 'POST'});
+      const data = await resp.json();
+      msg.textContent = 'Cache cleared (' + data.cleared_files + ' files). Reload any portal page to see fresh data.';
+      btn.textContent = 'Done';
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:4px;"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> Refresh All Data'; }, 3000);
+    } catch(e) {
+      msg.textContent = 'Refresh failed — try again.';
+      btn.disabled = false;
+      btn.textContent = 'Refresh All Data';
+    }
+  }
+  </script>
 </body>
 </html>

@@ -44,6 +44,13 @@ APPS = [
         "status": "live",
         "icon": "drafting",
     },
+    {
+        "name": "Sample Library",
+        "description": "Photograph a material sample, let Claude read the label, and file it instantly to the correct Dropbox folder — no renaming, no manual filing.",
+        "url": "/sample-library/",
+        "status": "live",
+        "icon": "swatch",
+    },
 ]
 
 PORTALS_FILE = Path("/opt/eid-apps/client-portal/data/projects.json")
