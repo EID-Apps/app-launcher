@@ -15,7 +15,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shared"))
 from config_loader import tenant
 
-import httpx
+import asyncio
+import json
+import os
+import time
+from pathlib import Path as _Path
+
+from storage_backend import get_storage_backend, StorageNotFoundError, StorageError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(f"{tenant.firm.service_prefix}-launcher")
@@ -27,16 +33,16 @@ templates = Jinja2Templates(directory=str(BASE / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 
 
-import json
-import time
-from pathlib import Path as _Path
-
 # ── Registry config ────────────────────────────────────────────────────────────
 _REGISTRY_DROPBOX_PATH = tenant.dropbox.registry_path
 _ENV_FILE = _Path(tenant.deployment.base_path) / "plaud-control" / "engine" / ".env"
 _registry_cache: list | None = None
 _registry_cache_at: float = 0.0
 _REGISTRY_TTL = 300  # 5 minutes
+
+# Module-level storage backend — lazily initialised in _get_storage()
+_storage = None
+_storage_lock = __import__('threading').Lock()
 
 
 def _read_env() -> dict:
@@ -52,24 +58,27 @@ def _read_env() -> dict:
     return creds
 
 
-async def _get_dropbox_token(creds: dict) -> str | None:
-    """Exchange refresh token for a short-lived access token."""
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                "https://api.dropbox.com/oauth2/token",
-                data={"grant_type": "refresh_token",
-                      "refresh_token": creds.get("DROPBOX_REFRESH_TOKEN", "")},
-                auth=(creds.get("DROPBOX_APP_KEY", ""),
-                      creds.get("DROPBOX_APP_SECRET", "")),
-            )
-            if resp.status_code == 200:
-                return resp.json().get("access_token")
-            logger.warning("Dropbox token refresh failed: %s", resp.status_code)
-            return None
-    except Exception as e:
-        logger.warning("Dropbox token error: %s", e)
-        return None
+def _get_storage():
+    """Return the module-level storage backend (synchronous, thread-safe)."""
+    global _storage
+    if _storage is not None:
+        return _storage
+    with _storage_lock:
+        if _storage is not None:
+            return _storage
+        creds = _read_env()
+        for k in ('DROPBOX_APP_KEY', 'DROPBOX_APP_SECRET', 'DROPBOX_REFRESH_TOKEN'):
+            if creds.get(k) and not os.environ.get(k):
+                os.environ[k] = creds[k]
+        _storage = get_storage_backend()
+        return _storage
+
+
+def _download_registry() -> list[dict]:
+    """Synchronous registry download - runs in executor."""
+    raw = _get_storage().download(_REGISTRY_DROPBOX_PATH)
+    data = json.loads(raw)
+    return [p for p in data.get("projects", []) if p.get("status") == "Active"]
 
 
 async def load_active_projects() -> list[dict]:
@@ -81,26 +90,8 @@ async def load_active_projects() -> list[dict]:
         return _registry_cache
 
     try:
-        creds = _read_env()
-        token = await _get_dropbox_token(creds)
-        if not token:
-            return []
-
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://content.dropboxapi.com/2/files/download",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Dropbox-API-Arg": json.dumps({"path": _REGISTRY_DROPBOX_PATH}),
-                },
-            )
-            if resp.status_code != 200:
-                logger.warning("Registry download failed: %s", resp.status_code)
-                return []
-
-            data = resp.json()
-
-        active = [p for p in data.get("projects", []) if p.get("status") == "Active"]
+        loop = asyncio.get_event_loop()
+        active = await loop.run_in_executor(None, _download_registry)
         _registry_cache = active
         _registry_cache_at = time.time()
         logger.info("Registry loaded: %d active projects", len(active))
