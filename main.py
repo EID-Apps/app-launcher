@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shared"))
 from config_loader import tenant
 
 import asyncio
+import httpx
 import json
 import os
 import time
